@@ -72,42 +72,46 @@ def main(lr, batch_size, input_size, patch_size, n_classes, load_ckpt, use_fp16,
     for epoch in tqdm(range(num_epochs)):
         model.train()
         for batch in tqdm(train_ds):
+            
             optim.zero_grad()
-            # x, y = batch
             x = torch.tensor(np.array(batch['image']))
             y = torch.tensor(batch['target'])
             x = x.to(device)
             y = y.to(device)
+            
             with torch.cuda.amp.autocast(enabled=use_fp16):
                 output = model(x)
-            loss = CE(output, y)
-            scaler.scale(loss).backward()
-            scaler.step(optim)
-            scaler.update()
-            running_loss += loss.item()
+                loss = CE(output, y)
+                scaler.scale(loss).backward()
+                scaler.step(optim)
+                scaler.update()
+                running_loss += loss.item()
+            
         if steps % steps_per_eval == 0:
             model.eval()
             valid_loss = 0
             accuracy = 0
             with torch.inference_mode():
                 for batch in tqdm(val_ds):
-                    # x, y = batch
                     x = torch.tensor(np.array(batch['image']))
                     y = torch.tensor(batch['target'])
                     x = x.to(device)
                     y = y.to(device)
+                    
                     output = model(x)
                     loss = CE(output, y)
                     valid_loss += loss.item()
                     if torch.argmax(output).item() == y:
                         accuracy +=1
             accuracy /= len(val_ds)
+            
             print(f'validation accuracy at {steps}: {accuracy:.3f}')
             sw.add_scalar('validation/accuracy', accuracy, steps)
             sw.add_scalar('validation/loss', valid_loss / len(val_ds), steps)
             sw.add_scalar('training/loss', running_loss / (steps + 1), steps)
             model.train()
             print('model set back to training mode.')
+            
             if accuracy < min_acc:
                 min_acc = accuracy
                 torch.save({'VIT': model.state_dict(),
@@ -116,6 +120,7 @@ def main(lr, batch_size, input_size, patch_size, n_classes, load_ckpt, use_fp16,
                             'min_acc': min_acc,
                             'running_loss': running_loss,
                             }, 'ckpt_best_loss.pth')
+                
             torch.save({'VIT': model.state_dict(),
                         'optimizer': optim.state_dict(),
                         'steps': steps,
