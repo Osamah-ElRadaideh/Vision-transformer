@@ -51,17 +51,24 @@ def main(lr, batch_size, input_size, patch_size, n_classes, load_ckpt, use_fp16,
 
     #patch_dim can be calculated as patch_size^2 * num_channels (3 for RGB, 1 for greyscale)
     model = VIT(input_size = input_size, patch_size=patch_size, patch_dim = 768, n_classes=n_classes, num_layers=4).to(device)
+    optim = torch.optim.Adam(model.parameters(),lr=lr)
+    steps = 0
+    running_loss = 0
+    min_acc = 1e7
+
     if load_ckpt:
         states = torch.load('ckpt_latest.pth')
-        model.load_state_dict(states)
-    optim = torch.optim.Adam(model.parameters(),lr=lr)
+        model.load_state_dict(states['VIT'])
+        optim.load_state_dict(states['optimizer']
+        steps = states['steps']
+        running_loss = states['running_loss']
+        min_acc = states['min_acc']
+        print('latest state restored.')
 
     scaler = torch.cuda.amp.GradScaler() 
 
     CE = nn.CrossEntropyLoss()
-    steps = 0
-    running_loss = 0
-    min_acc = 1e7
+  
     for epoch in tqdm(range(num_epochs)):
         model.train()
         for batch in tqdm(train_ds):
@@ -107,11 +114,13 @@ def main(lr, batch_size, input_size, patch_size, n_classes, load_ckpt, use_fp16,
                             'optimizer': optim.state_dict(),
                             'steps': steps,
                             'min_acc': min_acc,
+                            'running_loss': running_loss,
                             }, 'ckpt_best_loss.pth')
             torch.save({'VIT': model.state_dict(),
                         'optimizer': optim.state_dict(),
                         'steps': steps,
                         'min_acc': min_acc,
+                        'running_loss', running_loss,
                         }, 'ckpt_latest.pth')
 
 
